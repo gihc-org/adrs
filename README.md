@@ -22,3 +22,4 @@ Format: [Michael Nygard's ADR-template](https://cognitect.com/blog/2011/11/15/do
 | [0011](0011-argon2id-passwords.md) | Argon2id til password-hashing | Accepted |
 | [0012](0012-feature-flags-via-empty-env.md) | Tom env-variabel som feature flag til lokal udvikling | Accepted |
 | [0013](0013-owasp-by-default.md) | OWASP-sikkerhed som del af definition of done | Accepted |
+| [0014](0014-gdpr-and-cis-docker.md) | GDPR og CIS Docker Benchmark som tilbagevendende standarder | Accepted |
