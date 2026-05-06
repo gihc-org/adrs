@@ -24,3 +24,4 @@ Format: [Michael Nygard's ADR-template](https://cognitect.com/blog/2011/11/15/do
 | [0013](0013-owasp-by-default.md) | OWASP-sikkerhed som del af definition of done | Accepted |
 | [0014](0014-gdpr-and-cis-docker.md) | GDPR og CIS Docker Benchmark som tilbagevendende standarder | Accepted |
 | [0015](0015-gdpr-deletion-strategy-and-smoke-test.md) | GDPR-sletningstrategi og post-deploy smoke test | Accepted |
+| [0016](0016-webrtc-screen-sharing.md) | WebRTC skærmdelings-signalering via eksisterende WebSocket | Accepted |
