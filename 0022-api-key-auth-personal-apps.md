@@ -1,4 +1,4 @@
-# 0022 — API-nøgle frem for JWT til personlige enkeltbruger-apps
+# 0022 — API-nøgle frem for JWT til apps med lille betroet brugergruppe
 
 **Status:** Accepted  
 **Dato:** 2026-05-09  
@@ -6,8 +6,9 @@
 
 ## Kontekst
 
-`capture` er et personligt værktøj med præcis én bruger. Appen skal kunne
-tilgås fra flere enheder (telefon, bærbar, desktop) og må ikke være offentligt
+`capture` er et personligt værktøj for en lille betroet gruppe (ejer +
+et par venner). Appen skal kunne tilgås fra flere enheder og må ikke være
+offentligt
 tilgængeligt.
 
 ipfs-apps bruger JWT med Argon2id-hashet password (ADR-0011) og fuld
@@ -29,11 +30,13 @@ hvis headeren mangler eller er forkert.
 
 - **Ingen brugeradministration:** Ét hemmeligt token erstatter alt
   login-flow, password-hashing, token-rotation og sessionshåndtering.
-  Der er ingen brugere at administrere.
-- **Samme sikkerhedsniveau i praksis:** For én bruger er en stærk tilfældig
-  streng i `x-api-key` funktionelt ækvivalent med JWT — begge kræver at
-  hemmeligheden beskyttes. JWT's fordel (short-lived tokens, revocation)
-  er irrelevant når der kun er én session-ejer.
+  Gruppen er lille og stabil — ingen selvregi­strering er nødvendig.
+- **Delte data er intentionelt:** Alle brugere i gruppen ser og redigerer
+  de samme noder. Der er ingen krav om per-bruger dataadskillelse.
+- **Samme sikkerhedsniveau i praksis:** For en lille betroet gruppe er en
+  stærk tilfældig streng i `x-api-key` funktionelt ækvivalent med JWT —
+  begge kræver at hemmeligheden beskyttes. JWT's fordel (short-lived tokens,
+  revocation per bruger) er irrelevant når alle deler ét adgangsniveau.
 - **HTTPS tvungen via Caddy:** Nøglen transmitteres aldrig i klartekst.
   TLS-terminering håndteres af platform-Caddy (ADR-0017).
 - **Simpelt fejlscenarie:** Kompromitteret nøgle → opdater `API_KEY` i vault,
@@ -55,5 +58,7 @@ hvis headeren mangler eller er forkert.
 - Browserklienten gemmer nøglen i `localStorage` — acceptabelt for en
   personlig app på egne enheder. Nøglen må ikke bruges i delte browsere.
 - Smoke tests autentificerer med vault-nøglen direkte fra Ansible.
-- Modellen er **ikke** egnet hvis appen på et tidspunkt skal have flere
-  brugere med separate data — da skal JWT og brugeradministration indføres.
+- Alle brugere deler samme nøgle og ser alle data — modellen forudsætter
+  gensidig tillid i gruppen.
+- Modellen er **ikke** egnet hvis brugerne skal have separate datarum
+  — da skal JWT og brugeradministration indføres.
