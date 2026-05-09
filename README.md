@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Samling af ADRs (Architecture Decision Records) fra `ipfs-apps`-projektet.
+Samling af ADRs (Architecture Decision Records) fra projekterne på `gihc.online`.
 Bruges som reference ved nye projekter, der følger samme principper.
 
 Format: [Michael Nygard's ADR-template](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).
@@ -25,3 +25,9 @@ Format: [Michael Nygard's ADR-template](https://cognitect.com/blog/2011/11/15/do
 | [0014](0014-gdpr-and-cis-docker.md) | GDPR og CIS Docker Benchmark som tilbagevendende standarder | Accepted |
 | [0015](0015-gdpr-deletion-strategy-and-smoke-test.md) | GDPR-sletningstrategi og post-deploy smoke test | Accepted |
 | [0016](0016-webrtc-screen-sharing.md) | WebRTC skærmdelings-signalering via eksisterende WebSocket | Accepted |
+| [0017](0017-ansible-infra-deploy-split.md) | Opdeling af Ansible-playbook i infrastruktur og applikationsdeploy | Accepted |
+| [0018](0018-webrtc-audio-call.md) | WebRTC lyd-opkald i DM-rum | Accepted |
+| [0019](0019-shared-caddy-platform-layer.md) | Delt Caddy via platform-lag og conf.d-import | Accepted |
+| [0020](0020-sqlite-for-single-user-apps.md) | SQLite frem for PostgreSQL til enkeltbruger-apps | Accepted |
+| [0021](0021-adjacency-list-plus-edges-table.md) | Adjacency list + edges-tabel til træ- og DAG-semantik | Accepted |
+| [0022](0022-api-key-auth-personal-apps.md) | API-nøgle frem for JWT til personlige enkeltbruger-apps | Accepted |
