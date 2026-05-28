@@ -1,57 +1,76 @@
 # 0012 — Tom env-variabel som feature flag til lokal udvikling
 
 **Status:** Accepted  
-**Dato:** 2026-05-05  
-**Projekt:** ipfs-apps/chat
+**Dato:** 2026-05-05
 
 ## Kontekst
 
-Projektet har to valgfri tredjeparts-integrationer:
+Applikationer har ofte valgfrie tredjeparts-integrationer (CAPTCHA, e-mail,
+betalingsgateway, SMS) der kræver credentials som ikke er tilgængelige i
+lokal dev. I produktion er de obligatoriske.
 
-- **Cloudflare Turnstile** (CAPTCHA ved registration)
-- **Resend** (email-verifikation efter registration)
-
-Begge kræver credentials der ikke er tilgængelige i lokal dev-miljø.
-I produktion er de obligatoriske. Vi har brug for en måde at springe dem over
-lokalt uden at ændre kode.
+Der er behov for en konvention der slår integrationen fra lokalt uden at
+ændre kode eller indføre separate `ENABLE_X=false`-variabler.
 
 ## Beslutning
 
 En **tom string** i den respektive env-variabel bruges som feature flag:
 
-- `TURNSTILE_SECRET=""` → CAPTCHA-validering springes over, alle tokens accepteres
-- `RESEND_API_KEY=""` → Email sendes ikke, bruger auto-verificeres, verify-URL logges
+- Tom string → integrationen springes over (lokal/test-adfærd)
+- Non-empty string → integrationen aktiveres (produktionsadfærd)
 
 ```rust
-// captcha.rs
-pub async fn verify(client: &reqwest::Client, secret: &str, token: &str) -> bool {
-    if secret.is_empty() { return true; }
-    ...
+// Eksempel: valgfri CAPTCHA-integration
+pub async fn verify_captcha(secret: &str, token: &str) -> bool {
+    if secret.is_empty() { return true; }  // spring over hvis ikke konfigureret
+    // ... kald til ekstern service
 }
-
-// routes/auth.rs
-let auto_verify = state.config.resend_api_key.is_empty();
 ```
 
-`.env.example` indeholder tomme værdier for disse variable som default.
+`.env.example` indeholder tomme værdier for valgfrie integrationer som standard.
+
+```bash
+# .env.example
+CAPTCHA_SECRET=        # Tom = CAPTCHA deaktiveret (kun lokalt)
+EMAIL_API_KEY=         # Tom = emails logges i stedet for at sendes
+```
 
 ## Begrundelse
 
-- **Nul kode-ændringer** mellem lokal dev og produktion — samme binær, ander
-  konfiguration.
-- **Eksplicit toggle:** Tom string er semantisk tydelig som "ikke konfigureret"
-  — ingen separat `ENABLE_CAPTCHA=false`-variabel.
-- **Sikker standard:** Udeladelse af `TURNSTILE_SECRET` fra `.env` er
-  tilstrækkeligt til at slå CAPTCHA fra lokalt.
-- **Konsistent mønster:** Begge integrationer følger samme konvention — let at
-  forstå og let at tilføje nye valgfri integrationer.
+- **Nul kode-ændringer** mellem lokal dev og produktion — samme binær,
+  forskellig konfiguration.
+- **Eksplicit toggle:** Tom string er semantisk tydelig som "ikke konfigureret".
+- **Konsistent mønster:** Alle valgfrie integrationer følger samme konvention.
+
+## Testkrav
+
+Test at applikationen opfører sig korrekt i begge tilstande:
+
+```rust
+#[test]
+fn captcha_skipped_when_secret_is_empty() {
+    assert!(verify_captcha("", "any-token"));
+}
+
+#[test]
+fn captcha_checked_when_secret_is_set() {
+    // Mock ekstern service eller brug en test-nøgle
+}
+```
 
 ## Konsekvenser
 
-- En tom `TURNSTILE_SECRET` i **produktion** ville slå CAPTCHA fra. Ansible-vault
-  og `.env.example`-dokumentation skal gøre det klart at variable SKAL sættes
-  i produktion.
-- Lokale auto-verificerede konti vil fejle i produktion hvis email ikke er sat
-  korrekt op — det opdages ved første deploy-test.
-- Nye valgfri integrationer bør følge samme mønster: tom string = skip,
-  non-empty = aktiv.
+- **Sikkerhedskritiske variable må aldrig bruge dette mønster i produktion.**
+  En tom `DATABASE_URL` eller `JWT_SECRET` skal give en hård fejl ved
+  opstart — ikke stille fallback-adfærd. Brug opstartsvalidering
+  (se ADR-0026) til at håndhæve dette:
+  ```rust
+  // Aldrig dette for sikkerhedskritiske vars:
+  if jwt_secret.is_empty() { return default_behavior(); }
+  // I stedet:
+  assert!(!jwt_secret.is_empty(), "JWT_SECRET må ikke være tom i produktion");
+  ```
+- Mønsteret egner sig til: CAPTCHA, e-mail, SMS, analytics, ekstern logging.
+- Mønsteret egner sig **ikke** til: database-URL, hemmeligheder, krypteringsnøgler.
+- Nye valgfrie integrationer bør følge samme konvention og dokumenteres i
+  `.env.example`.
