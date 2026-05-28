@@ -1,43 +1,91 @@
-# 0017 — Opdeling af Ansible-playbook i infrastruktur og applikationsdeploy
+# 0017 — Opdel deployment i infrastruktur og applikation
 
 **Status:** Accepted  
-**Dato:** 2026-05-07  
-**Projekt:** ipfs-apps/chat
+**Dato:** 2026-05-07
 
 ## Kontekst
 
-Projektet bruger Ansible til både serveropsætning og applikationsdeploy. Oprindeligt lå alt i én `playbook.yml`. To behov pressede på for en opdeling:
+Deployment-automatisering håndterer typisk to meget forskellige ting:
 
-1. **CI/CD (Woodpecker):** En pipeline der automatisk deployer ved push må kun køre applikationsdeployments — ikke geninstallere Docker eller ændre OS-opsætning. Infrastructure-trin kræver bevidst manuel beslutning.
+1. **Infrastruktur:** OS-pakker, Docker-installation, firewall-regler,
+   brugere og rettigheder. Ændres sjældent, kræver root-adgang, er risikabelt
+   at køre automatisk.
+2. **Applikation:** Kode, konfigurationsfiler, containers, DNS. Ændres
+   hyppigt, skal køre automatisk ved hvert release.
 
-2. **Hastighed og risiko:** Docker-installation og apt-opdateringer er langsomme og sjældent nødvendige. At køre dem ved hvert release er spild og introducerer unødig risiko for at infra-ændringer rammer prod uventet.
+At blande dem i ét script giver langsom CI, unødig risiko og uklart ansvar.
 
 ## Beslutning
 
-Playbook'en opdeles i tre filer:
+Del deployment i to separate scripts:
 
-- **`ansible/infra.yml`** — Infrastrukturopsætning: apt-pakker, Docker-installation, projektmappe. Køres manuelt ved serveropsætning eller når OS/Docker-konfigurationen skal ændres.
-- **`ansible/deploy.yml`** — Applikationsdeploy: rsync, Caddyfile, .env, `docker compose up --build`, IPFS-upload, DNS-opdatering, smoke test, ZAP-scan. Køres ved hvert release — manuelt og via CI/CD.
-- **`ansible/playbook.yml`** — Convenience-wrapper der importerer begge: bruges kun ved første gangs provisioning af en ny server.
+- **`infra`-script** — Serveropsætning: pakker, Docker, projektmappe,
+  systembrugere. Køres **manuelt** ved ny server eller eksplicit
+  infrastrukturændring. Aldrig automatisk fra CI.
+- **`deploy`-script** — Applikationsdeploy: kode, config, containers,
+  konfigurations-validering, smoke test. Køres automatisk af CI ved
+  hvert release.
+- **`full`-script (valgfrit)** — Convenience-wrapper der kalder begge.
+  Bruges kun ved første gangs opsætning af en ny server.
+
+### Ansible-eksempel
 
 ```
-ansible-playbook ansible/infra.yml -i ansible/inventory.yml --ask-vault-pass   # ny server / infra-ændring
-ansible-playbook ansible/deploy.yml -i ansible/inventory.yml --ask-vault-pass  # hvert release
-ansible-playbook ansible/playbook.yml -i ansible/inventory.yml --ask-vault-pass # første gang
+ansible/
+  infra.yml      ← apt-pakker, Docker, projektmappe
+  deploy.yml     ← rsync, .env, docker compose up, validate, smoke test
+  playbook.yml   ← importerer begge — kun til første gangs provisioning
 ```
 
-CI/CD (Woodpecker) kalder udelukkende `deploy.yml`.
+```bash
+# Ny server / infra-ændring (manuelt)
+ansible-playbook ansible/infra.yml -i inventory.yml --ask-vault-pass
+
+# Hvert release (automatisk fra CI)
+ansible-playbook ansible/deploy.yml -i inventory.yml --ask-vault-pass
+
+# Første gangs provisioning (manuelt)
+ansible-playbook ansible/playbook.yml -i inventory.yml --ask-vault-pass
+```
+
+CI-pipeline har kun adgang til at køre `deploy`-scriptet.
+
+### Verificering i deploy-scriptet
+
+`deploy`-scriptet bør tidligt verificere at infrastrukturen er på plads,
+så fejlbeskeden er klar frem for en kryptisk downstream-fejl:
+
+```yaml
+# ansible/deploy.yml — tidligt check
+- name: Verificér at Docker er installeret
+  command: docker --version
+  changed_when: false
+  failed_when: false
+  register: docker_check
+
+- name: Fejl hvis Docker mangler
+  fail:
+    msg: "Docker er ikke installeret. Kør infra.yml først."
+  when: docker_check.rc != 0
+```
 
 ## Begrundelse
 
-**Separation of concerns:** Infrastruktur ændres sjældent og kræver root-adgang til OS-niveau operationer. Applikationsdeploy sker hyppigt og bør være idempotent og hurtigt. At blande dem i ét script gør begge dele sværere at vedligeholde.
+**Sikkerhed i CI:** En pipeline der kun kan køre `deploy`-scriptet kan ikke
+ved fejl eller kompromittering rekonfigurere Docker-daemonen, ændre
+apt-sources eller installere systempakker. Infra-ændringer kræver bevidst
+menneskelig handling.
 
-**Sikkerhed i CI/CD:** En pipeline der kun kan køre `deploy.yml` kan ikke ved fejl eller kompromittering rekonfigurere Docker-daemonen, ændre apt-sources eller lignende. Infra-ændringer kræver bevidst menneskelig handling.
+**Hastighed:** `deploy`-scriptet uden infra-trin er markant hurtigere —
+ingen apt-cache-opdatering, ingen pakkeinstallation ved hvert release.
 
-**Hastighed:** `deploy.yml` uden infra-trin er markant hurtigere — ingen apt-cache-opdatering, ingen Docker-GPG-nøgle-download, ingen pakkeinstallation.
+**Klarhed:** Opdelingen gør det åbenlyst hvilke ændringer der kræver manuel
+koordination (infra) og hvilke der er automatiske (deploy).
 
 ## Konsekvenser
 
-- `deploy.yml` forudsætter at `infra.yml` er kørt mindst én gang på serveren. Denne afhængighed er ikke teknisk håndhævet — det er dokumenteret i kommentarerne i begge filer og i `runbooks/deploy.md`.
-- Nye infrastruktur-behov (fx ny systempakke eller Docker-plugin) skal tilføjes i `infra.yml` og køres manuelt — de må ikke stilles i `deploy.yml`.
-- `playbook.yml` er udelukkende en convenience-wrapper og må ikke indeholde egne tasks.
+- `deploy`-scriptet forudsætter at `infra`-scriptet er kørt mindst én gang.
+  Dokumentér denne afhængighed i `README.md` eller et runbook.
+- Nye infrastruktur-behov (ny systempakke, Docker-plugin) tilføjes i
+  `infra`-scriptet og køres manuelt — aldrig i `deploy`.
+- Se `ci-cd.md` i guidelines for den fulde CI-pipeline der kalder `deploy`.
